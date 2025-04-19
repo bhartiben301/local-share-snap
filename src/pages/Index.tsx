@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
+import { toast } from "sonner";
 import FileUpload from '../components/FileUpload';
 import FileList, { FileInfo } from '../components/FileList';
 
@@ -19,22 +20,47 @@ const Index = () => {
       setFiles(updatedFiles);
     });
 
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      toast.error("Connection error. Running in local mode.");
+    });
+
     return () => {
       socket.disconnect();
     };
   }, []);
 
   const handleFileUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      socket.emit('upload', {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        data: reader.result
-      });
+    // Create a local file URL
+    const fileUrl = URL.createObjectURL(file);
+    
+    // Create a new file object
+    const newFile: FileInfo = {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      url: fileUrl
     };
-    reader.readAsArrayBuffer(file);
+    
+    // Update local state immediately
+    setFiles(prevFiles => [...prevFiles, newFile]);
+    toast.success(`File "${file.name}" uploaded successfully!`);
+    
+    // Still try to send to server if connected
+    try {
+      const reader = new FileReader();
+      reader.onload = () => {
+        socket.emit('upload', {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          data: reader.result
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.error('Error processing file:', error);
+    }
   };
 
   return (
